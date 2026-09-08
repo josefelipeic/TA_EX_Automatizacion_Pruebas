@@ -1,6 +1,6 @@
 # TA_EX - Automatizacion de Pruebas
 
-Proyecto academico Java 17/Maven que demuestra control de versiones, pruebas unitarias y de integracion, CI con GitHub Actions, acceptance tests, despliegue de prueba Blue-Green y rollback automatico.
+Proyecto Java 17/Maven que demuestra control de versiones, pruebas unitarias y de integracion, CI con GitHub Actions, acceptance tests, despliegue de prueba Blue-Green y rollback automatico.
 
 ## Estrategia de ramas
 Se utiliza Trunk-Based Development: `main` es la linea estable y el trabajo se realiza en ramas cortas `feature/*` o `fix/*`. Cada cambio entra mediante pull request y debe superar CI.
@@ -33,7 +33,7 @@ cat .runtime/active-slot .runtime/active-port
 ./scripts/rollback.sh
 ./scripts/cleanup.sh
 ```
-El candidato solo se activa despues del acceptance gate. Si falla, el slot estable permanece activo.
+El candidato solo se activa despues del acceptance gate. Si falla, el slot permanece activo.
 
 ## CI/CD
 `ci.yml` se ejecuta en push y pull request. `deploy-test.yml` se ejecuta manualmente desde Actions. Con `simulate_failure=false` demuestra el switch a Green; con `true` provoca un fallo controlado y demuestra rollback a Blue.
