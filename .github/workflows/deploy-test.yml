@@ -1,0 +1,64 @@
+name: Deploy Test Blue-Green
+on:
+  workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: "Forzar fallo controlado antes del switch"
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  deployment-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Commit stage - build, unit e integration tests
+        run: mvn -B clean verify
+      - name: Desplegar baseline Blue
+        run: |
+          mkdir -p .runtime
+          APP_PORT=8081 nohup java -jar target/automatizacion-pruebas-ta.jar > .runtime/blue.log 2>&1 &
+          echo $! > .runtime/blue.pid
+          echo blue > .runtime/active-slot
+          echo 8081 > .runtime/active-port
+          ./scripts/acceptance-test.sh http://localhost:8081
+      - name: Desplegar candidato Green y ejecutar acceptance gate
+        id: green
+        continue-on-error: true
+        run: |
+          APP_PORT=8082 nohup java -jar target/automatizacion-pruebas-ta.jar > .runtime/green.log 2>&1 &
+          echo $! > .runtime/green.pid
+          ./scripts/acceptance-test.sh http://localhost:8082
+          if [[ "${{ inputs.simulate_failure }}" == "true" ]]; then
+            echo "Fallo controlado solicitado" >&2
+            exit 1
+          fi
+          echo green > .runtime/active-slot
+          echo 8082 > .runtime/active-port
+          echo "SWITCH_OK active=green port=8082"
+      - name: Rollback automatico a Blue
+        if: steps.green.outcome == 'failure'
+        run: |
+          kill "$(cat .runtime/green.pid)" 2>/dev/null || true
+          echo blue > .runtime/active-slot
+          echo 8081 > .runtime/active-port
+          ./scripts/acceptance-test.sh http://localhost:8081
+          echo "ROLLBACK_OK active=blue port=8081"
+      - name: Verificar resultado final
+        run: |
+          port="$(cat .runtime/active-port)"
+          ./scripts/acceptance-test.sh "http://localhost:$port"
+          echo "FINAL_STATE slot=$(cat .runtime/active-slot) port=$port"
+      - name: Guardar evidencia de despliegue
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-evidence-${{ github.run_number }}
+          path: .runtime/**
